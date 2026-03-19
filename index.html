@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数独比赛计时器</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 编辑界面 -->
+    <div id="edit-panel" class="edit-panel">
+        <div class="edit-container">
+            <h1>数独比赛计时器设置</h1>
+
+            <!-- 语音包选择 -->
+            <section class="settings-section">
+                <h2>语音包设置</h2>
+                <p class="section-desc">选择您要使用的语音包，系统会自动加载音频文件。</p>
+                
+                <div class="voice-pack-options">
+                    <label class="voice-pack-option">
+                        <input type="radio" name="voice-pack" value="zh" checked>
+                        <div class="voice-pack-card">
+                            <span class="voice-pack-name">中文语音包</span>
+                            <span class="voice-pack-files">剩余五分钟、剩余一分钟、时间到、转</span>
+                        </div>
+                    </label>
+                    <label class="voice-pack-option">
+                        <input type="radio" name="voice-pack" value="en">
+                        <div class="voice-pack-card">
+                            <span class="voice-pack-name">English Voice Pack</span>
+                            <span class="voice-pack-files">5_minutes_left, 1_minute_left, Time's_up, Turn</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="form-group audio-status-group">
+                    <label>音频加载状态</label>
+                    <div id="audio-load-status" class="audio-load-status">
+                        <span class="status-indicator pending">等待加载语音包...</span>
+                    </div>
+                    <button id="load-voice-pack" class="btn btn-primary btn-small">加载语音包</button>
+                </div>
+            </section>
+
+            <!-- 赛会名称 -->
+            <section class="settings-section">
+                <h2>赛会名称</h2>
+                <div class="form-group">
+                    <label for="global-event-name">赛会名称</label>
+                    <input type="text" id="global-event-name" value="2024全国数独锦标赛" placeholder="请输入赛会名称">
+                </div>
+            </section>
+
+            <!-- 多轮次设置 -->
+            <section class="settings-section">
+                <h2>轮次设置</h2>
+                <div class="rounds-container" id="rounds-container">
+                </div>
+                <div class="round-actions">
+                    <button id="add-round" class="btn btn-primary">添加比赛轮次</button>
+                    <button id="add-break" class="btn btn-secondary">添加场间休息</button>
+                </div>
+            </section>
+
+            <!-- 全局样式设置 -->
+            <section class="settings-section">
+                <h2>全局样式设置</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="bg-color">背景颜色</label>
+                        <input type="color" id="bg-color" value="#2c3e50">
+                    </div>
+                    <div class="form-group">
+                        <label for="text-color">文字颜色</label>
+                        <input type="color" id="text-color" value="#ffffff">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="font-family">字体</label>
+                    <select id="font-family">
+                        <option value="system-ui, -apple-system, sans-serif">系统默认</option>
+                        <option value="'Microsoft YaHei', '微软雅黑', sans-serif">微软雅黑</option>
+                        <option value="'PingFang SC', '苹方', sans-serif">苹方</option>
+                        <option value="'Noto Sans SC', sans-serif">思源黑体</option>
+                        <option value="'Arial', sans-serif">Arial</option>
+                        <option value="'Roboto', sans-serif">Roboto</option>
+                        <option value="'Courier New', monospace">等宽字体</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="event-name-size">赛会名称大小</label>
+                    <input type="range" id="event-name-size" min="20" max="100" value="45">
+                    <span id="event-name-size-value">45px</span>
+                </div>
+                <div class="form-group">
+                    <label for="round-name-size">轮次名称大小</label>
+                    <input type="range" id="round-name-size" min="20" max="100" value="35">
+                    <span id="round-name-size-value">35px</span>
+                </div>
+                <div class="form-group">
+                    <label for="timer-size">倒计时数字大小</label>
+                    <input type="range" id="timer-size" min="100" max="400" value="250">
+                    <span id="timer-size-value">250px</span>
+                </div>
+            </section>
+
+            <!-- 操作按钮 -->
+            <div class="actions">
+                <button id="save-settings" class="btn btn-primary">保存设置</button>
+                <button id="start-timer" class="btn btn-success">开始全部计时</button>
+                <button id="reset-defaults" class="btn btn-secondary">恢复默认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 全屏倒计时界面 -->
+    <div id="timer-display" class="timer-display hidden">
+        <div class="timer-content">
+            <div class="event-info">
+                <div id="display-event-name" class="event-name"></div>
+                <div id="display-round-name" class="round-name"></div>
+            </div>
+            <div id="timer" class="timer">00:00</div>
+            <div id="next-round-info" class="next-round-info hidden">
+                <span>下一项: <span id="next-round-name"></span></span>
+            </div>
+        </div>
+        <div class="timer-controls">
+            <button id="pause-btn" class="control-btn">暂停</button>
+            <button id="resume-btn" class="control-btn hidden">继续</button>
+            <button id="skip-btn" class="control-btn">跳过当前</button>
+            <button id="stop-btn" class="control-btn">全部停止</button>
+            <button id="fullscreen-btn" class="control-btn">全屏</button>
+            <button id="exit-btn" class="control-btn">退出</button>
+        </div>
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

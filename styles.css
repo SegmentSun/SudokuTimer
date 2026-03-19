@@ -1,0 +1,678 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f5f5f5;
+    min-height: 100vh;
+}
+
+/* 隐藏类 */
+.hidden {
+    display: none !important;
+}
+
+/* 编辑界面样式 */
+.edit-panel {
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.edit-container {
+    max-width: 900px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.edit-container h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+    font-size: 28px;
+}
+
+.section-desc {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+/* 语音包选择 */
+.voice-pack-options {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.voice-pack-option {
+    cursor: pointer;
+}
+
+.voice-pack-option input {
+    display: none;
+}
+
+.voice-pack-card {
+    display: flex;
+    flex-direction: column;
+    padding: 15px 20px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.voice-pack-option:hover .voice-pack-card {
+    border-color: #3498db;
+    background: #f8f9fa;
+}
+
+.voice-pack-option:has(input:checked) .voice-pack-card {
+    border-color: #3498db;
+    background: #ebf5fb;
+}
+
+.voice-pack-name {
+    font-weight: 600;
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.voice-pack-files {
+    font-size: 13px;
+    color: #666;
+}
+
+.voice-hint {
+    display: block;
+    margin-top: 10px;
+    color: #666;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.settings-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.settings-section:last-of-type {
+    border-bottom: none;
+}
+
+.settings-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 20px;
+}
+
+/* 音频状态 */
+.audio-status-group {
+    margin-top: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.audio-load-status {
+    margin-bottom: 15px;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.status-indicator.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-indicator.loading {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.status-indicator.ready {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-indicator.error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-indicator::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.status-indicator.loading::before {
+    animation: pulse-dot 1s infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* 自定义音频区域 */
+.custom-audio-section {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 2px dashed #dee2e6;
+}
+
+/* 音频上传网格 */
+.audio-upload-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.audio-upload-item {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.audio-upload-item label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 10px;
+    color: #333;
+    font-size: 14px;
+}
+
+.audio-upload-item input[type="file"] {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 13px;
+}
+
+.file-status {
+    display: block;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.file-status.loaded {
+    color: #28a745;
+    font-weight: 500;
+}
+
+/* 轮次设置 */
+.rounds-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.round-item {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    position: relative;
+}
+
+.round-item.break {
+    background: #fff3cd;
+    border-color: #ffc107;
+}
+
+.round-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.round-number {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 16px;
+}
+
+.round-type-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.round-type-badge.round {
+    background: #d4edda;
+    color: #155724;
+}
+
+.round-type-badge.break {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.round-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.round-fields .form-group {
+    margin-bottom: 0;
+}
+
+.round-fields .form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+.remove-round {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    transition: background 0.3s;
+}
+
+.remove-round:hover {
+    background: #c82333;
+}
+
+.round-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #555;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.form-group input[type="color"] {
+    width: 100%;
+    height: 50px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.form-group input[type="range"] {
+    width: calc(100% - 80px);
+    margin-right: 10px;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #888;
+    font-size: 12px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* 单选按钮组 */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.radio-label:hover {
+    border-color: #3498db;
+    background: #f8f9fa;
+}
+
+.radio-label input[type="radio"] {
+    margin-right: 12px;
+    width: 18px;
+    height: 18px;
+}
+
+.radio-label input[type="radio"]:checked + span {
+    color: #3498db;
+    font-weight: 500;
+}
+
+.radio-label:has(input[type="radio"]:checked) {
+    border-color: #3498db;
+    background: #ebf5fb;
+}
+
+/* 按钮样式 */
+.actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 30px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.btn-small {
+    padding: 10px 20px;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2980b9;
+}
+
+.btn-success {
+    background: #27ae60;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #219a52;
+}
+
+.btn-secondary {
+    background: #95a5a6;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #7f8c8d;
+}
+
+/* 倒计时显示界面 */
+.timer-display {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #2c3e50;
+    color: white;
+    z-index: 1000;
+}
+
+.timer-content {
+    text-align: center;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.event-info {
+    margin-bottom: 30px;
+}
+
+.event-name {
+    font-size: 45px;
+    font-weight: 400;
+    margin-bottom: 15px;
+    opacity: 0.95;
+}
+
+.round-name {
+    font-size: 35px;
+    font-weight: 600;
+}
+
+.timer {
+    font-size: 250px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 10px;
+    line-height: 1;
+}
+
+.next-round-info {
+    margin-top: 30px;
+    font-size: 24px;
+    opacity: 0.8;
+    padding: 15px 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+/* 进度条 */
+.progress-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.progress-fill {
+    height: 100%;
+    background: #27ae60;
+    transition: width 1s linear;
+    width: 100%;
+}
+
+.progress-fill.warning {
+    background: #f39c12;
+}
+
+.progress-fill.danger {
+    background: #e74c3c;
+}
+
+/* 倒计时控制按钮 */
+.timer-controls {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    z-index: 1001;
+    margin-bottom: 20px;
+}
+
+.timer-display:hover .timer-controls {
+    opacity: 1;
+}
+
+.control-btn {
+    padding: 12px 24px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s;
+    backdrop-filter: blur(10px);
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.8);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .edit-container {
+        padding: 20px;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .round-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .audio-upload-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .timer {
+        font-size: 100px;
+    }
+
+    .event-name {
+        font-size: 28px !important;
+    }
+
+    .round-name {
+        font-size: 22px !important;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+    }
+
+    .round-actions {
+        flex-direction: column;
+    }
+
+    .timer-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        padding: 0 20px;
+        bottom: 20px;
+    }
+}
+
+/* 动画效果 */
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.timer.warning {
+    animation: pulse 1s infinite;
+    color: #e74c3c;
+}
+
+.timer.finished {
+    color: #e74c3c;
+}
+
+/* 提示消息 */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 15px 25px;
+    background: #27ae60;
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 2000;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.toast.error {
+    background: #e74c3c;
+}

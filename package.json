@@ -1,0 +1,42 @@
+{
+  "name": "sudoku-timer",
+  "version": "1.0.0",
+  "description": "数独比赛计时器",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.sudoku.timer",
+    "productName": "数独比赛计时器",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "styles.css",
+      "script.js",
+      "audios/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "audios",
+        "to": "audios"
+      }
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "数独比赛计时器.exe"
+    }
+  }
+}
