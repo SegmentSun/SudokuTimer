@@ -4,9 +4,12 @@
 const DEFAULT_CONFIG = {
     eventName: '2026全国数独锦标赛',
     rounds: [
-        { type: 'round', roundName: '第一轮', duration: 30, alertType: 'normal', rotationInterval: 30 }
+        { type: 'round', roundName: '第1轮', duration: 30, alerts: [
+            { minutes: 5, enabled: true },
+            { minutes: 1, enabled: true }
+        ], rotationEnabled: false, rotationInterval: 30 }
     ],
-    voicePack: 'zh',
+    voicePack: 'zh-1',
     bgColor: '#2c3e50',
     textColor: '#ffffff',
     fontFamily: "system-ui, -apple-system, sans-serif",
@@ -15,35 +18,74 @@ const DEFAULT_CONFIG = {
     timerSize: 250
 };
 
-// 音频文件映射
-const AUDIO_FILES = {
+// 语音包配置
+// 结构：语言 -> 语音包ID -> { 文件名映射, 可用时间点 }
+const VOICE_PACKS = {
     zh: {
-        '5min': 'audios/zh/剩余五分钟.mp3',
-        '1min': 'audios/zh/剩余一分钟.mp3',
-        'end': 'audios/zh/时间到.mp3',
-        'rotation': 'audios/zh/转.mp3'
+        '1': {
+            name: '中文语音包1',
+            files: {
+                5: 'audios/zh/1/5min.mp3',
+                1: 'audios/zh/1/1min.mp3',
+                'end': 'audios/zh/1/end.mp3',
+                'rotation': 'audios/zh/1/rotation.mp3'
+            }
+        }
     },
     en: {
-        '5min': 'audios/en/5_minutes_left.mp3',
-        '1min': 'audios/en/1_minute_left.mp3',
-        'end': 'audios/en/Time\'s_up.mp3',
-        'rotation': 'audios/en/Turn.mp3'
+        '1': {
+            name: 'English Pack 1',
+            files: {
+                5: 'audios/en/1/5min.mp3',
+                1: 'audios/en/1/1min.mp3',
+                'end': 'audios/en/1/end.mp3',
+                'rotation': 'audios/en/1/rotation.mp3'
+            }
+        }
     }
 };
+
+// 获取可用的语音包列表
+function getAvailableVoicePacks() {
+    const packs = [];
+    for (const [lang, langPacks] of Object.entries(VOICE_PACKS)) {
+        for (const [packId, packInfo] of Object.entries(langPacks)) {
+            packs.push({
+                id: `${lang}-${packId}`,
+                lang: lang,
+                packId: packId,
+                name: packInfo.name
+            });
+        }
+    }
+    return packs;
+}
+
+// 获取语音包的语言
+function getVoicePackLang(voicePackId) {
+    return voicePackId.split('-')[0];
+}
+
+// 获取语音包的ID
+function getVoicePackNumber(voicePackId) {
+    return voicePackId.split('-')[1];
+}
 
 // 全局状态
 let config = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
 let audioContext = null;
-let audioElements = {}; // HTML5 Audio 元素
-let audioSources = {}; // Web Audio source 节点
+let audioElements = {};
+let audioSources = {};
 let currentRoundIndex = 0;
 let timerInterval = null;
 let remainingSeconds = 0;
 let isPaused = false;
+let isPreview = false;
 let alertedTimes = new Set();
 let lastRotationAlert = 0;
 let totalDuration = 0;
 let isAudioPreloaded = false;
+let cachedVoices = [];
 let startTime = Date.now();
 let pausedElapsed = 0;
 let pausedAt = 0;
@@ -52,13 +94,49 @@ let pausedAt = 0;
 const elements = {};
 
 // 初始化
+// 渲染语音包选项
+function renderVoicePackOptions() {
+    const container = document.getElementById('voice-pack-options');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    // 遍历所有语音包并生成选项
+    for (const [lang, langPacks] of Object.entries(VOICE_PACKS)) {
+        for (const [packId, packInfo] of Object.entries(langPacks)) {
+            const packIdFull = `${lang}-${packId}`;
+            const isChecked = config.voicePack === packIdFull || (!config.voicePack && lang === 'zh' && packId === '1');
+            const langName = lang === 'zh' ? '中文' : 'English';
+            
+            const label = document.createElement('label');
+            label.className = 'voice-pack-option';
+            label.innerHTML = `
+                <input type="radio" name="voice-pack" value="${packIdFull}" ${isChecked ? 'checked' : ''}>
+                <div class="voice-pack-card">
+                    <span class="voice-pack-name">${langName}语音包${packId}</span>
+                    <span class="voice-pack-files">${packInfo.name}</span>
+                </div>
+            `;
+            container.appendChild(label);
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initElements();
     loadConfig();
+    renderVoicePackOptions(); // 动态渲染语音包选项
     bindEvents();
     renderRounds();
     updateUI();
     updateAudioStatus('pending', '请先加载语音包');
+    bindRoundInputEvents();
+    
+    // 预加载语音列表
+    console.log('开始预加载语音列表...');
+    getVoicesWithTimeout().then(voices => {
+        console.log('预加载完成，语音列表:', voices.map(v => `${v.name} (${v.lang})`));
+    });
 });
 
 // 初始化 DOM 元素引用
@@ -80,6 +158,7 @@ function initElements() {
     elements.loadVoicePackBtn = document.getElementById('load-voice-pack');
     elements.saveSettings = document.getElementById('save-settings');
     elements.startTimer = document.getElementById('start-timer');
+    elements.previewTimer = document.getElementById('preview-timer');
     elements.resetDefaults = document.getElementById('reset-defaults');
     elements.timerDisplay = document.getElementById('timer-display');
     elements.displayEventName = document.getElementById('display-event-name');
@@ -113,6 +192,7 @@ function bindEvents() {
     });
     elements.saveSettings.addEventListener('click', saveSettings);
     elements.startTimer.addEventListener('click', startTimer);
+    elements.previewTimer.addEventListener('click', previewTimer);
     elements.resetDefaults.addEventListener('click', resetDefaults);
     elements.pauseBtn.addEventListener('click', pauseTimer);
     elements.resumeBtn.addEventListener('click', resumeTimer);
@@ -133,18 +213,30 @@ function updateAudioStatus(status, message) {
     indicator.textContent = message;
 }
 
-// 加载语音包 - 使用 HTML5 Audio
+// 加载语音包 - 使用 HTML5 Audio，支持多语音包和fallback
 async function loadVoicePack() {
     try {
-        const voicePack = document.querySelector('input[name="voice-pack"]:checked')?.value || 'zh';
-        config.voicePack = voicePack;
-
-        console.log('开始加载语音包:', voicePack);
+        const voicePackId = document.querySelector('input[name="voice-pack"]:checked')?.value || 'zh-1';
+        config.voicePack = voicePackId;
+        
+        const lang = getVoicePackLang(voicePackId);
+        const packId = getVoicePackNumber(voicePackId);
+        
+        console.log('开始加载语音包:', voicePackId, '语言:', lang, '包ID:', packId);
 
         updateAudioStatus('loading', '正在加载音频...');
 
-        const files = AUDIO_FILES[voicePack];
+        // 获取语音包配置
+        const packConfig = VOICE_PACKS[lang]?.[packId];
+        if (!packConfig) {
+            throw new Error('未找到语音包配置');
+        }
+        
+        const files = packConfig.files;
         console.log('音频文件列表:', files);
+        
+        // 清空之前的音频元素
+        audioElements = {};
         
         // 逐个加载音频
         for (const [key, path] of Object.entries(files)) {
@@ -156,13 +248,22 @@ async function loadVoicePack() {
                 // 使用 Promise 包装 load 事件
                 await new Promise((resolve, reject) => {
                     audio.addEventListener('canplaythrough', resolve);
-                    audio.addEventListener('error', reject);
+                    audio.addEventListener('error', () => {
+                        // 文件不存在时也resolve，避免中断加载流程
+                        console.warn(`音频文件不存在: ${path}`);
+                        resolve();
+                    });
                     audio.src = path;
                     audio.load();
                 });
                 
-                audioElements[key] = audio;
-                console.log(`已加载: ${key}, 时长: ${audio.duration}秒`);
+                // 检查音频是否成功加载（duration > 0 表示加载成功）
+                if (audio.duration > 0) {
+                    audioElements[key] = audio;
+                    console.log(`已加载: ${key}, 时长: ${audio.duration}秒`);
+                } else {
+                    console.warn(`音频文件不存在或无法加载: ${path}`);
+                }
                 
                 // 每个音频加载后稍作延迟
                 await new Promise(resolve => setTimeout(resolve, 200));
@@ -172,8 +273,18 @@ async function loadVoicePack() {
         }
         
         isAudioPreloaded = true;
-        updateAudioStatus('ready', '音频已就绪');
-        showToast('语音包加载完成');
+        
+        // 统计成功加载的音频
+        const loadedCount = Object.keys(audioElements).length;
+        const totalCount = Object.keys(files).length;
+        
+        if (loadedCount === totalCount) {
+            updateAudioStatus('ready', '音频已就绪');
+            showToast('语音包加载完成');
+        } else {
+            updateAudioStatus('ready', `已加载${loadedCount}/${totalCount}个音频，部分将使用语音合成`);
+            showToast(`语音包部分加载成功 (${loadedCount}/${totalCount})，缺失音频将使用语音合成`);
+        }
         
         // 预热 AudioContext - 播放一个静音来激活
         warmupAudio();
@@ -270,6 +381,129 @@ function playWarmupTone(callback) {
     };
 }
 
+// 数字转英文函数
+const NUMBER_TO_ENGLISH = [
+    'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
+    'twenty', 'twenty-one', 'twenty-two', 'twenty-three', 'twenty-four', 'twenty-five', 'twenty-six', 'twenty-seven', 'twenty-eight', 'twenty-nine', 'thirty'
+];
+
+function numberToEnglish(num) {
+    if (num >= 0 && num <= 30) {
+        return NUMBER_TO_ENGLISH[num];
+    }
+    return num.toString();
+}
+
+// 判断一个声音是否为男声（基于名称关键词）
+// 注意：Windows 中文语音(Kangkang, Huihui, Yaoyao)都是女声
+function isMaleVoice(voice) {
+  const maleKeywords = [
+    // 英文男声常见关键词
+    'male', 'Male', 'David', 'Mark', 'George', 'Paul', 'Daniel',
+    'James', 'John', 'Robert', 'Michael', 'William', 'Richard',
+    // 中文男声 - Windows 默认语音都是女声，所以这个列表通常为空
+    // 只有当系统安装了额外的语音包时才会生效
+    '云希', 'Yunxi', '云扬', 'Yunyang', '男', '男性', '男生',
+  ];
+  return maleKeywords.some(keyword => voice.name.includes(keyword));
+}
+
+// 获取可用的声音列表（带等待加载和缓存）
+function getVoicesWithTimeout() {
+    return new Promise((resolve) => {
+        // 如果已有缓存，直接返回
+        if (cachedVoices.length > 0) {
+            resolve(cachedVoices);
+            return;
+        }
+        
+        const maxAttempts = 10;
+        const delay = 100;
+        let attempts = 0;
+        
+        function tryGetVoices() {
+            let voices = window.speechSynthesis.getVoices();
+            
+            if (voices.length > 0) {
+                console.log(`获取到 ${voices.length} 个语音 (尝试 ${attempts + 1}次)`);
+                cachedVoices = voices; // 缓存结果
+                resolve(voices);
+                return;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                console.log(`等待语音加载... (尝试 ${attempts}/${maxAttempts})`);
+                setTimeout(tryGetVoices, delay);
+            } else {
+                console.log('未能获取到语音列表');
+                resolve([]);
+            }
+        }
+        
+        // 首先尝试直接获取
+        tryGetVoices();
+    });
+}
+
+// 语音合成函数 - 使用 Web Speech API
+async function speakText(text, useEnglish = null) {
+    console.log('语音合成:', text);
+    
+    if (!('speechSynthesis' in window)) {
+        console.warn('浏览器不支持语音合成');
+        return;
+    }
+
+    // 自动检测语言：如果文本包含英文字母，或者指定了英文
+    if (useEnglish === true || (useEnglish === null && /[a-zA-Z]/.test(text))) {
+        // 翻译阿拉伯数字为英文
+        text = text.replace(/\d+/g, (match) => {
+            const num = parseInt(match);
+            return numberToEnglish(num);
+        });
+    }
+    
+    const isEnglish = useEnglish === true || (useEnglish === null && /[a-zA-Z]/.test(text));
+    const lang = isEnglish ? 'en-US' : 'zh-CN';
+
+    playWarmupTone(async () => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.rate = 1.0;
+        
+        // 异步获取 voices
+        const voices = await getVoicesWithTimeout();
+        console.log('可用语音列表:', voices.map(v => `${v.name} (${v.lang})`));
+        
+        if (voices.length > 0) {
+            // 优先选择男声
+            const matchingVoices = voices.filter(v => 
+                v.lang.startsWith(isEnglish ? 'en' : 'zh')
+            );
+            console.log('匹配语言的语音:', matchingVoices.map(v => v.name));
+            
+            const maleVoice = matchingVoices.find(v => isMaleVoice(v));
+            
+            if (maleVoice) {
+                utterance.voice = maleVoice;
+                utterance.pitch = 1.0;
+                console.log('✓ 使用男声:', maleVoice.name);
+            } else {
+                // 没有男声时使用第一个匹配的语音，并降低音调模拟男声
+                if (matchingVoices.length > 0) {
+                    utterance.voice = matchingVoices[0];
+                    utterance.pitch = 0.8; // 降低音调模拟男声
+                    console.log('使用女声模拟男声:', matchingVoices[0].name, '(pitch=0.8)');
+                }
+            }
+        }
+        
+        window.speechSynthesis.speak(utterance);
+    });
+}
+
 // 修改 playAudio 函数，添加更多日志以便调试
 function playAudio(type) {
     console.log(`播放音频: ${type}, Element存在: ${!!audioElements[type]}`);
@@ -324,7 +558,11 @@ function addRound(type) {
         type: type,
         roundName: type === 'round' ? `第${config.rounds.filter(r => r.type === 'round').length + 1}轮` : '场间休息',
         duration: type === 'round' ? 30 : 10,
-        alertType: 'normal',
+        alerts: type === 'round' ? [
+            { minutes: 5, enabled: true },
+            { minutes: 1, enabled: true }
+        ] : [],
+        rotationEnabled: false,
         rotationInterval: 30
     };
     config.rounds.push(round);
@@ -343,11 +581,30 @@ function renderRounds() {
     elements.roundsContainer.innerHTML = '';
 
     config.rounds.forEach((round, index) => {
+        console.log('round:', round);
+        console.log(index);
         const roundEl = document.createElement('div');
         roundEl.className = `round-item ${round.type}`;
         
         const typeLabel = round.type === 'round' ? '比赛轮次' : '场间休息';
+        const alerts = round.alerts || [];
         
+        let alertsHtml = '';
+        alerts.forEach((alert, alertIndex) => {
+            alertsHtml += `
+                <div class="alert-item" data-alert-index="${alertIndex}">
+                    <input type="checkbox" class="alert-enabled" ${alert.enabled !== false ? 'checked' : ''}>
+                    <span>剩余</span>
+                    <input type="number" class="alert-minutes" value="${alert.minutes}" min="1" max="180" style="width: 60px;"> 
+                    <span>分钟</span>
+                    <button class="remove-alert btn-remove-small">×</button>
+                </div>
+            `;
+        });
+
+        const durationMinutes = round.duration ? Math.floor(round.duration / 60) : 0;
+        const durationSeconds = round.duration ? round.duration % 60 : 0;
+
         roundEl.innerHTML = `
             <div class="round-header">
                 <span class="round-number">#${index + 1}</span>
@@ -366,21 +623,32 @@ function renderRounds() {
                         <input type="text" class="round-round-name" value="${round.roundName}" placeholder="休息名称">
                     </div>
                 `}
-                <div class="form-group">
-                    <label>时长（分钟）</label>
-                    <input type="number" class="round-duration" value="${round.duration}" min="1" max="180">
+                <div class="form-group duration-group">
+                    <label>时长</label>
+                    <div class="duration-inputs">
+                        <input type="number" class="round-duration-min" value="${durationMinutes}" min="0" max="180">
+                        <span>分</span>
+                        <input type="number" class="round-duration-sec" value="${durationSeconds}" min="0" max="59">
+                        <span>秒</span>
+                    </div>
                 </div>
                 ${round.type === 'round' ? `
-                    <div class="form-group">
-                        <label>提醒类型</label>
-                        <select class="round-alert-type">
-                            <option value="normal" ${round.alertType === 'normal' ? 'selected' : ''}>常规轮次（5分/1分提醒）</option>
-                            <option value="rotation" ${round.alertType === 'rotation' ? 'selected' : ''}>轮转模式</option>
-                        </select>
+                    <div class="form-group full-width">
+                        <label>提醒设置</label>
+                        <div class="alerts-container">
+                            ${alertsHtml}
+                        </div>
+                        <button class="btn btn-secondary btn-small add-alert-btn">+ 添加提醒</button>
                     </div>
-                    <div class="form-group rotation-settings" style="${round.alertType !== 'rotation' ? 'display:none' : ''}">
-                        <label>轮转间隔（秒）</label>
-                        <input type="number" class="round-rotation-interval" value="${round.rotationInterval}" min="1" max="300">
+                    <div class="form-group full-width">
+                        <label>
+                            <input type="checkbox" class="rotation-enabled" ${round.rotationEnabled ? 'checked' : ''}>
+                            启用轮转模式
+                        </label>
+                        <div class="rotation-settings" style="${round.rotationEnabled ? '' : 'display:none'}">
+                            <input type="number" class="round-rotation-interval" value="${round.rotationInterval}" min="1" max="300">
+                            <span>秒/次</span>
+                        </div>
                     </div>
                 ` : ''}
             </div>
@@ -388,15 +656,40 @@ function renderRounds() {
 
         elements.roundsContainer.appendChild(roundEl);
 
-        roundEl.querySelector('.remove-round').addEventListener('click', () => removeRound(index));
-
-        const alertTypeSelect = roundEl.querySelector('.round-alert-type');
-        if (alertTypeSelect) {
-            alertTypeSelect.addEventListener('change', (e) => {
-                const rotationSettings = roundEl.querySelector('.rotation-settings');
-                rotationSettings.style.display = e.target.value === 'rotation' ? 'block' : 'none';
+        // 绑定轮转模式开关事件
+        const rotationEnabledCheckbox = roundEl.querySelector('.rotation-enabled');
+        if (rotationEnabledCheckbox) {
+            rotationEnabledCheckbox.addEventListener('change', (e) => {
+                const settingsDiv = roundEl.querySelector('.rotation-settings');
+                if (settingsDiv) {
+                    settingsDiv.style.display = e.target.checked ? 'flex' : 'none';
+                }
+                config.rounds[index].rotationEnabled = e.target.checked;
             });
         }
+
+        roundEl.querySelector('.remove-round').addEventListener('click', () => removeRound(index));
+
+        const addAlertBtn = roundEl.querySelector('.add-alert-btn');
+        if (addAlertBtn) {
+            addAlertBtn.addEventListener('click', () => {
+                if (!config.rounds[index].alerts) {
+                    config.rounds[index].alerts = [];
+                }
+                config.rounds[index].alerts.push({ minutes: 3, enabled: true });
+                renderRounds();
+                bindRoundInputEvents();
+            });
+        }
+
+        roundEl.querySelectorAll('.remove-alert').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const alertIndex = parseInt(e.target.closest('.alert-item').dataset.alertIndex);
+                config.rounds[index].alerts.splice(alertIndex, 1);
+                renderRounds();
+                bindRoundInputEvents();
+            });
+        });
     });
 }
 
@@ -405,8 +698,9 @@ function bindRoundInputEvents() {
     const roundItems = document.querySelectorAll('.round-item');
     roundItems.forEach((roundEl, index) => {
         const roundNameInput = roundEl.querySelector('.round-round-name');
-        const durationInput = roundEl.querySelector('.round-duration');
-        const alertTypeSelect = roundEl.querySelector('.round-alert-type');
+        const durationMinInput = roundEl.querySelector('.round-duration-min');
+        const durationSecInput = roundEl.querySelector('.round-duration-sec');
+        const rotationEnabledCheckbox = roundEl.querySelector('.rotation-enabled');
         const rotationIntervalInput = roundEl.querySelector('.round-rotation-interval');
 
         if (roundNameInput) {
@@ -415,24 +709,56 @@ function bindRoundInputEvents() {
             });
         }
 
-        if (durationInput) {
-            durationInput.addEventListener('input', (e) => {
-                config.rounds[index].duration = parseInt(e.target.value) || 1;
-            });
+        if (durationMinInput && durationSecInput) {
+            const updateDuration = () => {
+                const mins = parseInt(durationMinInput.value) || 0;
+                const secs = parseInt(durationSecInput.value) || 0;
+                config.rounds[index].duration = mins * 60 + secs;
+            };
+            durationMinInput.addEventListener('input', updateDuration);
+            durationSecInput.addEventListener('input', updateDuration);
         }
 
-        if (alertTypeSelect) {
-            alertTypeSelect.addEventListener('change', (e) => {
-                config.rounds[index].alertType = e.target.value;
-                renderRounds(); // 重新渲染以更新轮转间隔输入框的显示状态
+        if (rotationEnabledCheckbox) {
+            rotationEnabledCheckbox.addEventListener('change', (e) => {
+                config.rounds[index].rotationEnabled = e.target.checked;
+                const settingsDiv = roundEl.querySelector('.rotation-settings');
+                if (settingsDiv) {
+                    settingsDiv.style.display = e.target.checked ? 'flex' : 'none';
+                }
             });
         }
 
         if (rotationIntervalInput) {
             rotationIntervalInput.addEventListener('input', (e) => {
-                config.rounds[index].rotationInterval = parseInt(e.target.value) || 1;
+                config.rounds[index].rotationInterval = parseInt(e.target.value) || 30;
             });
         }
+
+        roundEl.querySelectorAll('.alert-item').forEach((alertEl, alertIndex) => {
+            const enabledCheckbox = alertEl.querySelector('.alert-enabled');
+            const minutesInput = alertEl.querySelector('.alert-minutes');
+
+            if (enabledCheckbox) {
+                enabledCheckbox.addEventListener('change', (e) => {
+                    if (!config.rounds[index].alerts) config.rounds[index].alerts = [];
+                    if (!config.rounds[index].alerts[alertIndex]) {
+                        config.rounds[index].alerts[alertIndex] = { minutes: 5, enabled: true };
+                    }
+                    config.rounds[index].alerts[alertIndex].enabled = e.target.checked;
+                });
+            }
+
+            if (minutesInput) {
+                minutesInput.addEventListener('input', (e) => {
+                    if (!config.rounds[index].alerts) config.rounds[index].alerts = [];
+                    if (!config.rounds[index].alerts[alertIndex]) {
+                        config.rounds[index].alerts[alertIndex] = { minutes: 5, enabled: true };
+                    }
+                    config.rounds[index].alerts[alertIndex].minutes = parseInt(e.target.value) || 1;
+                });
+            }
+        });
     });
 }
 
@@ -441,12 +767,25 @@ function readConfigFromForm() {
     const rounds = [];
     document.querySelectorAll('.round-item').forEach((el) => {
         const type = el.classList.contains('break') ? 'break' : 'round';
+        const alerts = [];
+        if (type === 'round') {
+            el.querySelectorAll('.alert-item').forEach(alertEl => {
+                alerts.push({
+                    minutes: parseInt(alertEl.querySelector('.alert-minutes')?.value) || 1,
+                    enabled: alertEl.querySelector('.alert-enabled')?.checked || false
+                });
+            });
+        }
+        const rotationEnabledCheckbox = el.querySelector('.rotation-enabled');
+        const durationMin = parseInt(el.querySelector('.round-duration-min')?.value) || 0;
+        const durationSec = parseInt(el.querySelector('.round-duration-sec')?.value) || 0;
         const round = {
             type: type,
             roundName: el.querySelector('.round-round-name')?.value || '',
-            duration: parseInt(el.querySelector('.round-duration')?.value) || 10,
-            alertType: type === 'round' ? (el.querySelector('.round-alert-type')?.value || 'normal') : 'normal',
-            rotationInterval: type === 'round' ? (parseInt(el.querySelector('.round-rotation-interval')?.value) || 30) : 30
+            duration: durationMin * 60 + durationSec || 10,
+            alerts: alerts,
+            rotationEnabled: type === 'round' ? (rotationEnabledCheckbox?.checked || false) : false,
+            rotationInterval: type === 'round' ? (parseInt(el.querySelector('.round-rotation-interval')?.value) || 30) : 0
         };
         rounds.push(round);
     });
@@ -526,13 +865,12 @@ async function startTimer() {
     }
 
     for (let i = 0; i < config.rounds.length; i++) {
-        if (config.rounds[i].duration < 1 || config.rounds[i].duration > 180) {
-            showToast(`第${i + 1}项时长必须在 1-180 分钟之间`, 'error');
+        if (config.rounds[i].duration < 1 || config.rounds[i].duration > 180 * 60) {
+            showToast(`第${i + 1}项时长不能为空`, 'error');
             return;
         }
     }
 
-    // 在用户点击时预热 AudioContext
     warmupAudio();
 
     if (!isAudioPreloaded) {
@@ -549,7 +887,57 @@ async function startTimer() {
     startRound(currentRoundIndex);
 }
 
-// 开始指定轮次
+// 预览计时器界面
+function previewTimer() {
+    config = readConfigFromForm();
+
+    if (config.rounds.length === 0) {
+        showToast('请至少添加一个轮次', 'error');
+        return;
+    }
+
+    for (let i = 0; i < config.rounds.length; i++) {
+        if (config.rounds[i].duration < 1 || config.rounds[i].duration > 180 * 60) {
+            showToast(`第${i + 1}项时长不能为空`, 'error');
+            return;
+        }
+    }
+
+    // 进入第一个轮次的预览状态
+    const round = config.rounds[0];
+    totalDuration = round.duration;
+    remainingSeconds = totalDuration;
+    isPaused = true;
+    isPreview = true;
+    currentRoundIndex = 0;
+    alertedTimes.clear();
+    lastRotationAlert = 0;
+    startTime = Date.now();
+    pausedElapsed = 0;
+
+    updateTimerDisplay();
+    applyStyles();
+    updateProgressBar();
+
+    elements.editPanel.classList.add('hidden');
+    elements.timerDisplay.classList.remove('hidden');
+
+    elements.pauseBtn.classList.add('hidden');
+    elements.resumeBtn.classList.remove('hidden');
+    elements.resumeBtn.textContent = '开始';
+
+    // 显示下一轮信息（如果有）
+    if (config.rounds.length > 1) {
+        elements.nextRoundInfo.classList.remove('hidden');
+        elements.nextRoundName.textContent = config.rounds[1].roundName;
+    } else {
+        elements.nextRoundInfo.classList.add('hidden');
+    }
+
+    document.title = `${round.roundName} - 准备开始`;
+}
+
+// 开始指定轮次（从预览或直接开始）
 function startRound(index) {
     if (index >= config.rounds.length) {
         showToast('所有轮次已完成');
@@ -558,7 +946,7 @@ function startRound(index) {
     }
 
     const round = config.rounds[index];
-    totalDuration = round.duration * 60;
+    totalDuration = round.duration;
     remainingSeconds = totalDuration;
     isPaused = false;
     alertedTimes.clear();
@@ -653,33 +1041,61 @@ function checkAlerts() {
     const round = config.rounds[currentRoundIndex];
     if (round.type === 'break') return;
 
-    const minutes = Math.floor((remainingSeconds - 1) / 60); // 提前 1 秒计算提醒时间
+    const minutes = Math.floor((remainingSeconds - 1) / 60);
     const totalElapsed = totalDuration - remainingSeconds;
 
-    if (round.alertType === 'normal') {
-        if (minutes === 5 && (remainingSeconds - 1) % 60 === 0 && !alertedTimes.has(5)) {
-            alertedTimes.add(5);
-            playAudio('5min');
+    const alerts = round.alerts || [];
+    alerts.forEach(alert => {
+        if (!alert.enabled) return;
+        
+        const alertKey = `alert-${alert.minutes}`;
+        if (minutes === alert.minutes && (remainingSeconds - 1) % 60 === 0 && !alertedTimes.has(alertKey)) {
+            alertedTimes.add(alertKey);
+            
+            // 优先使用本地音频，如果不存在则使用语音合成
+            const hasLocalAudio = audioElements[alert.minutes] !== undefined;
+            const isEnglish = config.voicePack.startsWith('en');
+            
+            if (hasLocalAudio) {
+                playAudio(alert.minutes);
+            } else {
+                const text = isEnglish 
+                    ? `${alert.minutes} minutes left` 
+                    : `剩余${alert.minutes}分钟`;
+                speakText(text, isEnglish);
+            }
         }
-        if (minutes === 1 && (remainingSeconds - 1) % 60 === 0 && !alertedTimes.has(1)) {
-            alertedTimes.add(1);
-            playAudio('1min');
-        }
-    } else {
-        const interval = round.rotationInterval;
-        if (remainingSeconds > 1 && totalElapsed > 0 && (totalElapsed + 1) % interval === 0 && totalElapsed !== lastRotationAlert) {
-            lastRotationAlert = totalElapsed;
+    });
+
+    const rotationEnabled = round.rotationEnabled || false;
+    const rotationInterval = round.rotationInterval || 30;
+    if (rotationEnabled && rotationInterval > 0 && remainingSeconds > 1 && totalElapsed > 0 && (totalElapsed + 1) % rotationInterval === 0 && totalElapsed !== lastRotationAlert) {
+        lastRotationAlert = totalElapsed;
+        
+        // 检查是否有本地轮转音频
+        if (audioElements['rotation']) {
             playAudio('rotation');
+        } else {
+            const isEnglish = config.voicePack.startsWith('en');
+            const text = isEnglish ? 'Turn' : '转';
+            speakText(text, isEnglish);
         }
     }
-    if(remainingSeconds === 1){
-        playAudio('end');
+
+    if (remainingSeconds === 1) {
+        // 检查是否有本地结束音频
+        if (audioElements['end']) {
+            playAudio('end');
+        } else {
+            const isEnglish = config.voicePack.startsWith('en');
+            const text = isEnglish ? "Time's up" : '时间到';
+            speakText(text, isEnglish);
+        }
     }
 
     if (remainingSeconds <= 30 && remainingSeconds > 0) {
         elements.timer.classList.add('warning');
-    }
-    else{
+    } else {
         elements.timer.classList.remove('warning');
     }
 }
@@ -730,6 +1146,28 @@ function pauseTimer() {
 
 // 继续计时
 function resumeTimer() {
+    if (isPreview) {
+        isPreview = false;
+        isPaused = false; // 关键：需要设置 isPaused = false 才能开始计时
+        warmupAudio();
+        
+        if (!isAudioPreloaded) {
+            updateAudioStatus('loading', '正在加载音频...');
+            loadVoicePack().then(() => {
+                startInterval();
+            }).catch(error => {
+                showToast('音频加载失败', 'error');
+                startInterval();
+            });
+        } else {
+            startInterval();
+        }
+        
+        elements.pauseBtn.classList.remove('hidden');
+        elements.resumeBtn.classList.add('hidden');
+        return;
+    }
+    
     if (isPaused) {
         pausedElapsed += Date.now() - pausedAt;
     }
@@ -763,6 +1201,7 @@ function exitTimer() {
         document.exitFullscreen();
     }
     isPaused = false;
+    isPreview = false;
     remainingSeconds = 0;
     currentRoundIndex = 0;
     pausedElapsed = 0;
@@ -771,6 +1210,7 @@ function exitTimer() {
     elements.editPanel.classList.remove('hidden');
     elements.pauseBtn.classList.remove('hidden');
     elements.resumeBtn.classList.add('hidden');
+    elements.resumeBtn.textContent = '继续';
     elements.nextRoundInfo.classList.add('hidden');
     document.title = '数独比赛计时器';
 }

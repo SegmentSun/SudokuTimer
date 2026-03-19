@@ -17,21 +17,8 @@
                 <h2>语音包设置</h2>
                 <p class="section-desc">选择您要使用的语音包，系统会自动加载音频文件。</p>
                 
-                <div class="voice-pack-options">
-                    <label class="voice-pack-option">
-                        <input type="radio" name="voice-pack" value="zh" checked>
-                        <div class="voice-pack-card">
-                            <span class="voice-pack-name">中文语音包</span>
-                            <span class="voice-pack-files">剩余五分钟、剩余一分钟、时间到、转</span>
-                        </div>
-                    </label>
-                    <label class="voice-pack-option">
-                        <input type="radio" name="voice-pack" value="en">
-                        <div class="voice-pack-card">
-                            <span class="voice-pack-name">English Voice Pack</span>
-                            <span class="voice-pack-files">5_minutes_left, 1_minute_left, Time's_up, Turn</span>
-                        </div>
-                    </label>
+                <div class="voice-pack-options" id="voice-pack-options">
+                    <!-- 语音包选项将由 JavaScript 动态生成 -->
                 </div>
 
                 <div class="form-group audio-status-group">
@@ -109,6 +96,7 @@
             <div class="actions">
                 <button id="save-settings" class="btn btn-primary">保存设置</button>
                 <button id="start-timer" class="btn btn-success">开始全部计时</button>
+                <button id="preview-timer" class="btn btn-secondary">进入计时器</button>
                 <button id="reset-defaults" class="btn btn-secondary">恢复默认</button>
             </div>
         </div>
